@@ -1,0 +1,30 @@
+import textdata
+import sys
+reload(sys)
+sys.setdefaultencoding("utf-8")
+from textclean.textclean import textclean
+import pickle
+
+listy=[]
+senslist=[]
+raw = open("../texts/conquerorworm").read()
+cleaned = textclean.clean(raw)
+listy=textdata.textlines(cleaned, noblanks=True, dedent=True, lstrip=False, rstrip=True, join=False)
+print listy, len(listy)
+
+for lists in listy:
+    sens = [word.lower() 
+            for word in nltk.sent_tokenize(lists)]
+    senslist.append(sens)
+
+fullsentt=[]
+for sensy in senslist:
+    sentt=[]
+    for sen in sensy:
+	sentt += nltk.pos_tag(nltk.word_tokenize(sen))
+    fullsentt.append(sentt)
+
+storepickle(fullsentt,"conqueror_pickle")
+
+for line in mm:
+    print line

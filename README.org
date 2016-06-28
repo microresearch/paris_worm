@@ -1,0 +1,26 @@
+* worming
+
+- source texts - and strip these down!
+
+- worm movement algorithm and how this is applied as needs to be across a grid (a grid of words but is normally long list
+
+[[file:~/projects/ERD_modules/worm/docs/WORMALG/WORMALG.pde]] - but we need re-do vector code
+
+- re-visit older text algorithms. see : /root/projects/earthcode/worm and diana:   /root/collected/diana/chapters/3_glass-crash:
+
+isbrand.py for example...
+
+worm through source text (by words or by lines)?
+worm through substitutions tables for the POS?
+
+- plan for worming in notebook. test on one source text. maybe also focus on word WORM itself!
+
+- worm reworkings
+
+/// menagerie of worms each with an alchemical/worm emblem
+
+so 2 worms one for source, other for model worm through individual or
+collated texts - one worms until it reaches appropriate part of speech
+to match others, wormholes etc.
+
+* worm server
