@@ -12,6 +12,8 @@ import sys, pygame
 
 
 cmudict = nltk.corpus.cmudict.dict()
+pygame.init()
+wormfont = pygame.font.SysFont("monospace", 10)
 #plotter=[]
 
 def rhyme(a, b):
@@ -107,16 +109,16 @@ class worm():
     simplecompost=[]
 
     def __init__(self, loc, speed, maxspeed, textpickle, wormtype, matchfunc, partner, partnerloc, partnerspeed, partnerpickle, partnertype):
-        self.loc = loc
         self.speed = speed
         self.trail = 8 # set by type of worm
         self.acc=(0,0)
         self.vel=(0,0)
+        self.text_name=textpickle #for debugging
         #        self.ww = 2400 # or this is based on text/pickle but per line so...
         #self.wh = 2400 # or this is based on text/pickle but per line so...
         self.maxspeed = maxspeed
         self.tail = []
-        self.equalized_tail = []  
+        self.equalized_tail = []  #tail normalized for visualization
         self.counter = 0
         self.tailcount=0
         self.dir=(7,-4) # change this
@@ -144,9 +146,11 @@ class worm():
         if textpickle == "COMPOST":
 #            self.composter=randyx(self.stack,worm.compost_stack) # but not itself #not in use
             self.text=worm.simplecompost
+            self.loc = (0,0)
         else: 
-            self.text = recallpickle(textpickle) 
-        self.init_tail()   
+            self.text = recallpickle(textpickle)
+            self.loc = (randy(20),randy(len(self.text))) 
+        #self.init_tail()   
         if partner==None:
             self.partner=worm(partnerloc,partnerspeed,maxspeed,partnerpickle,partnertype,None,"Some",0,0,0,0) 
             worm.fullworms.append(self)    
@@ -155,22 +159,26 @@ class worm():
     def init_tail(self):
         for w in range(self.trail):
             self.tail.append((self.loc[0],self.loc[1]-w))
-        self.equalized_tail = self.equalize_x_and_y()
+        self.equalized_tail = self.equalize_tail()
         pygame.draw.lines(screen, black, False, self.equalized_tail, 1)
         pygame.display.update()
 
     #Equalize tail for display => change scale of x and y coordinates
-    def equalize_x_and_y(self):
+    def equalize_tail(self):
         equalized_tail = []
         for w in range(self.trail):
             if len(self.text) > 0:
-                equalized_x = self.tail[w][0]*640/len(self.text[int(self.loc[1])])
-                equalized_y = self.tail[w][1]*640/len(self.text)
-                equalized_tail.append((equalized_x, equalized_y))
+                equalized_loc = self.equalize_x_and_y(self.tail[w])
+                equalized_tail.append(equalized_loc)
             else:
                 equalized_tail.append((0,0))
             #returns empty array for empty compost
         return equalized_tail
+
+    def equalize_x_and_y(self, loc):
+        equalized_x = loc[0]*640/len(self.text[int(self.loc[1])])
+        equalized_y = loc[1]*640/len(self.text)
+        return (equalized_x, equalized_y)
 
     def checkdist(self):
         dis=(self.target[0]-self.loc[0],self.target[1]-self.loc[1]) 
@@ -187,21 +195,32 @@ class worm():
     #Move each worm on display according to current location => shift entire tail
     def move_worm(self):
         pygame.time.delay(100)
-#        equalized_tail = self.equalize_x_and_y()
+#        equalized_tail = self.equalize_tail()
         pygame.draw.lines(screen, white, False, self.equalized_tail, 1)
         for w in range(self.trail-1):
             self.tail[w+1]=self.tail[w]
-        self.tail[0]=(self.loc[0],self.loc[1])
-        self.equalized_tail = self.equalize_x_and_y()
+        self.tail[0]=self.loc
+        self.equalized_tail = self.equalize_tail()
         pygame.draw.lines(screen, black, False, self.equalized_tail, 1)
         self.erase_gaps()
         pygame.display.update()
 
+    #erase lines connecting gaps - for bookworm
     def erase_gaps(self):
-        #erase lines connecting gaps - for bookworm
         for w in range(self.trail-1):
             if abs(self.tail[w+1][1] - self.tail[w][1])>=len(self.text) or abs(self.tail[w+1][0] - self.tail[w][0])>=len(self.text[int(self.loc[1]-1)])-1:
                 pygame.draw.lines(screen, white, False, [self.equalized_tail[w], self.equalized_tail[w+1]], 1)
+
+    #Write word on screen at equalized location of worm (in red if match)
+    def write_word(self, word, match):
+        pygame.time.delay(100)
+        if match:
+            label = wormfont.render(word, 1, red)
+        else:
+            label = wormfont.render(word, 1, black)
+        loc = self.equalize_x_and_y(self.loc)
+        screen.blit(label, loc)
+        pygame.display.update()
             
     def word_at(self,loc):
         # check x and y for self.text
@@ -263,6 +282,7 @@ class worm():
         else:
             self.loc=(0,self.loc[1])
     
+    #BUG FIX: crashing when text is empty => never run on empty text
     def updatelocation(self):
         self.vel = (self.vel[0] + self.acc[0], self.vel[1] + self.acc[1])
         self.vel=limit(self.vel,self.maxspeed)
@@ -283,9 +303,14 @@ class worm():
                 #list for compost
                 otherlist=[]
                 while pos!="NL":
-                    # match with otherother according to function eg. posmatch, rhyming 
-                    word,pos,loc=worms.matchfunc(worms.function, worms.partner.function)
-                    print (word, (int(loc[0]),int(loc[1])))
+                    # match with otherother according to function eg. posmatch, rhyming
+                    if len(worms.partner.text)==0:   #don't run match function on empty partner text
+                        word,pos,loc=worms.function()
+                    else:
+                        word,pos,loc=worms.matchfunc(worms.function, worms.partner.function)
+                        worms.write_word(word, True)
+                        worms.partner.write_word(word, True)
+                    print (word, (int(loc[0]),int(loc[1])))#, worms.matchfunc, worms.function, worms.partner.function, worms.text_name, worms.partner.text_name)
                     otherlist.append((word,pos))
                     #                worm.compost[self.stack].append(otherlist)
                 worm.simplecompost.append(otherlist)
@@ -300,7 +325,8 @@ class worm():
         self.acc=normalize(self.acc)
         self.acc = (self.acc[0] * self.speed, self.acc[1] * self.speed)
         word,pos=self.updatelocation()
-        self.move_worm()
+ #       self.move_worm()
+        self.write_word(word, False)
         return (word,pos,self.loc) # returns word, POS and location
 
     def reader(self): # walk text at speed, without any acceleration
@@ -312,7 +338,8 @@ class worm():
                 self.loc=(0, 0) # circulate back to start
         line=self.text[int(self.loc[1])]
         word,pos=line[int(self.loc[0])]
-        self.move_worm()
+  #      self.move_worm()
+        self.write_word(word, False)
         return (word,pos,self.loc) # returns word, POS and location
 
     def straight(self):
@@ -322,7 +349,8 @@ class worm():
         self.acc=normalize(self.acc)
         self.acc = (self.acc[0] * self.speed, self.acc[1] * self.speed)
         word,pos=self.updatelocation()
-        self.move_worm()
+ #       self.move_worm()
+        self.write_word(word, False)
         return (word,pos,self.loc) # returns word, POS and location
 
     def squiggler(self):
@@ -332,7 +360,8 @@ class worm():
         self.acc = (self.dir[0],self.dir[1])
         self.acc = (self.acc[0] + z[0], self.acc[1] + z[1])
         word,pos=self.updatelocation()
-        self.move_worm()
+  #      self.move_worm()
+        self.write_word(word, False)
         return (word,pos,self.loc) # returns word, POS and location
     
     #BUG FIX: not indexing into tuple when comparing with forms of worm
@@ -354,7 +383,8 @@ class worm():
             self.checkdist() ### ????
             self.acc = (self.acc[0] * self.speed, self.acc[1] * self.speed)
             word,pos=self.updatelocation()
-            self.move_worm()
+   #         self.move_worm()
+            self.write_word(word, False)
             return (word,pos,self.loc) # returns word, POS and location
  
 # TODO diff movements -> move randomly then towards targetsDONE, move
@@ -394,11 +424,13 @@ def test_worms():
     wormlist=['basicworm','bookworm','straightworm', 'seeker', 'squiggler']
     funclist=[matchonlyfirst,matchpos,matchrhyme,matchswop]
 
+    #matchonlyfirst
+
     wormyy=[]
     for x in range(5):
         loc=(randy(20),randy(20))
-#        wormyy.append(worm(loc,speed,maxspeed, random.choice(textlist), random.choice(wormlist),random.choice(funclist),None,loc,speed,random.choice(textlist), random.choice(wormlist)))
-        wormyy.append(worm(loc,speed,maxspeed, "fullblake_pickle", random.choice(wormlist),random.choice(funclist),None,loc,speed,"conqueror_pickle", random.choice(wormlist)))
+        wormyy.append(worm(loc,speed,maxspeed, random.choice(textlist), random.choice(wormlist),random.choice(funclist),None,loc,speed,random.choice(textlist), random.choice(wormlist)))
+#        wormyy.append(worm(loc,speed,maxspeed, 'conqueror_pickle', 'squiggler',matchonlyfirst,None,loc,speed,'conqueror_pickle', 'squiggler'))
 
     for x in range(100):
         wormyy[0].doallworms()
@@ -406,6 +438,7 @@ def test_worms():
 screen = pygame.display.set_mode((SCREEN_DIM,SCREEN_DIM))
 white = (255,255,255)
 black = (0,0,0)
+red = (175,0,0)
 screen.fill(white)
 pygame.display.update()
 test_worms()
@@ -483,3 +516,24 @@ test_worms()
 #seek: not indexing into tuple when comparing with forms of worm
 
 #seek: var names unaligned => not returning correct tuple form within first if statement
+
+#doallworms: do not call match function when compost is empty to avoid index errors
+
+#Functionality changes/updates
+
+#1. Add tail functionality (to be able to draw the worm)
+#   Functions: init_tail, equalize_tail, move_worm
+
+#2. Move worms on screen - equalized according to text length
+#   Functions: equalize_tail, equalize_x_and_y, move_worm
+#   NOTE: If keeping worms for final animation, edit so they don't erase when they move
+
+#3. Starting y location chosen randomly based on length of text
+
+#4. Write words on screen - words that worms uncover in black and match words in red
+#   Functions: write_word
+
+#General Notes:
+
+#1. Repeating words: sometimes the worms only have enough velocity to move partially through a word (i.e. from (0,0) to (.5,.5)), which
+#   in the next iteration keeps them at the same word. If they match again with that word, the outputted word and location will be repeated.
