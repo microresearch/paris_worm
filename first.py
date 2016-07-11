@@ -3,14 +3,16 @@
 import random
 import math
 import nltk
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import pickle
 import collections
 import functools
 import itertools
+import sys, pygame
+
 
 cmudict = nltk.corpus.cmudict.dict()
-plotter=[]
+#plotter=[]
 
 def rhyme(a, b):
     if a.lower() not in cmudict or b not in cmudict or a == b:
@@ -23,7 +25,14 @@ def recallpickle(where):
     out = open(where, 'rb')
     text=pickle.load(out) 
     out.close()
+#    testtext(text)
     return text
+    
+def testtext(text):
+    for line in text:
+       for word in line:
+          if len(word) != 2:
+             print(word)
 
 def randy(num):
     return random.randrange(0, num, 1)
@@ -67,10 +76,10 @@ def matchswop(matchone,matchtwo): # swop words
     else:
         return matchtwo()
 
-
+#BUG FIX: otherpos and pos are not the same type (pos vs location)
 def matchpos(matchone,matchtwo): # look for match
     count=0
-    pos= matchone()[0][1] # [1] is pos
+    pos= matchone()[1] # [1] is pos
     otherpos=""
     while otherpos != pos and count<100: # TODO: redo with match function - match(this,that) eg use matchone()[0]
         count+=1
@@ -78,11 +87,11 @@ def matchpos(matchone,matchtwo): # look for match
         otherpos=other[1]
     return other
 
+#BUG FIX: wordone and wordtwo are not the same type
 def matchrhyme(matchone,matchtwo): # look for match
     count=0
-    wordone= matchone()[0][0] # [0] is word
+    wordone= matchone()[0] # [0] is word
     wordtwo="xxx"
-#    print rhyme(wordone,wordtwo)
     while (not rhyme(wordone,wordtwo)) and count<100: # TODO: redo with match function - match(this,that) eg use matchone()[0]
         count+=1
         other=matchtwo()
@@ -92,11 +101,12 @@ def matchrhyme(matchone,matchtwo): # look for match
 class worm():
     compost_stack = -1
     compost = []
-    wormlist=[]
+    
+    #list of full worms (worms that have partners)
     fullworms=[]
     simplecompost=[]
 
-    def __init__(self, loc, speed, maxspeed, textpickle, wormtype, wormfunc, partner, partnerloc, partnerspeed, partnerpickle, partnertype):
+    def __init__(self, loc, speed, maxspeed, textpickle, wormtype, matchfunc, partner, partnerloc, partnerspeed, partnerpickle, partnertype):
         self.loc = loc
         self.speed = speed
         self.trail = 8 # set by type of worm
@@ -105,7 +115,8 @@ class worm():
         #        self.ww = 2400 # or this is based on text/pickle but per line so...
         #self.wh = 2400 # or this is based on text/pickle but per line so...
         self.maxspeed = maxspeed
-        self.tail = []  
+        self.tail = []
+        self.equalized_tail = []  
         self.counter = 0
         self.tailcount=0
         self.dir=(7,-4) # change this
@@ -122,19 +133,44 @@ class worm():
 
         self.function=self.wormdict[wormtype]
         # also need holes, targets and so on TODO maybe as dictionary or as part of text itself
-        self.composter=0
-        self.matchfunc=wormfunc
-        for w in xrange(self.trail):
-            self.tail.append((self.loc[0],self.loc[1]))
+#        self.composter=0 #not in use
+        self.matchfunc=matchfunc
+#        for w in range(self.trail):
+#            self.tail.append((self.loc[0],self.loc[1]-w))
 
         worm.compost_stack += 1
         self.stack=worm.compost_stack
         worm.compost.append([])
-        self.textpickle=textpickle
-        worm.wormlist.append(self)    
+        if textpickle == "COMPOST":
+#            self.composter=randyx(self.stack,worm.compost_stack) # but not itself #not in use
+            self.text=worm.simplecompost
+        else: 
+            self.text = recallpickle(textpickle) 
+        self.init_tail()   
         if partner==None:
             self.partner=worm(partnerloc,partnerspeed,maxspeed,partnerpickle,partnertype,None,"Some",0,0,0,0) 
             worm.fullworms.append(self)    
+
+    #Initialize tail of worms and draw each worm on the screen
+    def init_tail(self):
+        for w in range(self.trail):
+            self.tail.append((self.loc[0],self.loc[1]-w))
+        self.equalized_tail = self.equalize_x_and_y()
+        pygame.draw.lines(screen, black, False, self.equalized_tail, 1)
+        pygame.display.update()
+
+    #Equalize tail for display => change scale of x and y coordinates
+    def equalize_x_and_y(self):
+        equalized_tail = []
+        for w in range(self.trail):
+            if len(self.text) > 0:
+                equalized_x = self.tail[w][0]*640/len(self.text[int(self.loc[1])])
+                equalized_y = self.tail[w][1]*640/len(self.text)
+                equalized_tail.append((equalized_x, equalized_y))
+            else:
+                equalized_tail.append((0,0))
+            #returns empty array for empty compost
+        return equalized_tail
 
     def checkdist(self):
         dis=(self.target[0]-self.loc[0],self.target[1]-self.loc[1]) 
@@ -145,8 +181,27 @@ class worm():
 
     def do_tail(self):
         self.tail[self.trail-1]=(self.loc[0],self.loc[1])
-        for w in xrange(self.trail-1):
+        for w in range(self.trail-1):
             self.tail[w]=self.tail[w+1]
+
+    #Move each worm on display according to current location => shift entire tail
+    def move_worm(self):
+        pygame.time.delay(100)
+#        equalized_tail = self.equalize_x_and_y()
+        pygame.draw.lines(screen, white, False, self.equalized_tail, 1)
+        for w in range(self.trail-1):
+            self.tail[w+1]=self.tail[w]
+        self.tail[0]=(self.loc[0],self.loc[1])
+        self.equalized_tail = self.equalize_x_and_y()
+        pygame.draw.lines(screen, black, False, self.equalized_tail, 1)
+        self.erase_gaps()
+        pygame.display.update()
+
+    def erase_gaps(self):
+        #erase lines connecting gaps - for bookworm
+        for w in range(self.trail-1):
+            if abs(self.tail[w+1][1] - self.tail[w][1])>=len(self.text) or abs(self.tail[w+1][0] - self.tail[w][0])>=len(self.text[int(self.loc[1]-1)])-1:
+                pygame.draw.lines(screen, white, False, [self.equalized_tail[w], self.equalized_tail[w+1]], 1)
             
     def word_at(self,loc):
         # check x and y for self.text
@@ -179,48 +234,62 @@ class worm():
     def checky(self):
         self.wh = len(self.text)-1 # number of lines 
         if int(self.loc[1])>self.wh:
-            self.loc=(self.loc[0],0)
+            if self.function == self.reader:
+                self.loc=(self.loc[0],0) #reach bottom and appear at top
+            else: #change direction
+                self.acc=(self.acc[0],-self.acc[1])
+                self.vel=(0,0)
+                self.loc=(self.loc[0],self.wh)
         if self.loc[1]<0:
-            self.loc=(self.loc[0],self.wh)
+            if self.function == self.reader:
+                self.loc=(self.loc[0],self.wh) #reach top and appear at bottom
+            else: #change direction
+                self.acc=(self.acc[0],-self.acc[1])
+                self.vel=(0,0)
+                self.loc=(self.loc[0],0)
 
     def checkx(self):
         if self.ww>0:
             if int(self.loc[0])>self.ww:
-                self.loc=(0,self.loc[1])
+ #               self.loc=(0,self.loc[1])  #reach right and appear in left
+                self.acc=(-self.acc[0],self.acc[1])
+                self.vel=(0,0)
+                self.loc=(self.ww,self.loc[1])
             if self.loc[0]<0:
-                self.loc=(self.ww-1,self.loc[1])
+ #              self.loc=(self.ww-1,self.loc[1])  #reach left and appear in right
+                self.acc=(-self.acc[0],self.acc[1])
+                self.vel=(0,0)
+                self.loc=(0,self.loc[1])
         else:
             self.loc=(0,self.loc[1])
-
-    def doinit(self):
-        # select compost stack number
-        for worms in worm.wormlist:
-            if worms.textpickle == "COMPOST":
-                worms.composter=randyx(worms.stack,worm.compost_stack) # but not itself
-                worms.text=worm.simplecompost
-            else: 
-                worms.text = recallpickle(worms.textpickle)
-                # select partner worm
-            # if len(worm.wormlist)>1:
-            #     worms.partner=randyx(worms.stack,len(worm.wormlist)-1)
-            # else:
-            #     worms.partner=0
+    
+    def updatelocation(self):
+        self.vel = (self.vel[0] + self.acc[0], self.vel[1] + self.acc[1])
+        self.vel=limit(self.vel,self.maxspeed)
+        self.loc = (self.loc[0]+self.vel[0], self.loc[1]+self.vel[1])
+        self.checky()
+        line=self.text[int(self.loc[1])]
+        self.ww=len(line)-1
+        self.checkx()
+        return line[int(self.loc[0])]
 
 
     def doallworms(self):
-        for worms in worm.fullworms:
-            word=("","")
+        for worms in self.fullworms:
+            word = ""
+            pos = ""
+            loc = (0,0)
             if len(worms.text)>1:
+                #list for compost
                 otherlist=[]
-                while word[1]!="NL":
+                while pos!="NL":
                     # match with otherother according to function eg. posmatch, rhyming 
-                    wordy=worms.matchfunc(worms.function, worms.partner.function)
-                    word=wordy[0]
-#                    print word[0], (int(wordy[1][0]),int(wordy[1][1]))
-                    plotter.append((wordy[1][0]/20,wordy[1][1]/1000, word[0]))
-                    otherlist.append(word)
+                    word,pos,loc=worms.matchfunc(worms.function, worms.partner.function)
+                    print (word, (int(loc[0]),int(loc[1])))
+                    otherlist.append((word,pos))
                     #                worm.compost[self.stack].append(otherlist)
                 worm.simplecompost.append(otherlist)
+#                print worm.simplecompost
                 #                print worms.function,
                 # if worms.textpickle=="COMPOST":
                 #     print " ".join([x[0] for x in otherlist]),
@@ -230,15 +299,9 @@ class worm():
         self.acc = (self.acc[0] + random.uniform(-2,2), self.acc[1] + random.uniform(-2,2))
         self.acc=normalize(self.acc)
         self.acc = (self.acc[0] * self.speed, self.acc[1] * self.speed)
-        self.vel = (self.vel[0] + self.acc[0], self.vel[1] + self.acc[1])
-        self.vel=limit(self.vel,self.maxspeed)
-        self.loc = (self.loc[0]+self.vel[0], self.loc[1]+self.vel[1])
-        self.checky();
-        line=self.text[int(self.loc[1])]
-        self.ww=len(line)-1
-        self.checkx()
-        word=line[int(self.loc[0])]
-        return (word,self.loc) # returns word, POS and location
+        word,pos=self.updatelocation()
+        self.move_worm()
+        return (word,pos,self.loc) # returns word, POS and location
 
     def reader(self): # walk text at speed, without any acceleration
         self.checky()
@@ -248,8 +311,9 @@ class worm():
             if self.loc[1]>=self.wh:
                 self.loc=(0, 0) # circulate back to start
         line=self.text[int(self.loc[1])]
-        word=line[int(self.loc[0])]
-        return (word,self.loc) # returns word, POS and location
+        word,pos=line[int(self.loc[0])]
+        self.move_worm()
+        return (word,pos,self.loc) # returns word, POS and location
 
     def straight(self):
         self.acc = (self.dir[0],self.dir[1])
@@ -257,15 +321,9 @@ class worm():
         self.acc = (self.acc[0]+rrrr[0], self.acc[1]+rrrr[1])
         self.acc=normalize(self.acc)
         self.acc = (self.acc[0] * self.speed, self.acc[1] * self.speed)
-        self.vel = (self.vel[0] + self.acc[0], self.vel[1] + self.acc[1])
-        self.vel=limit(self.vel,self.maxspeed)
-        self.loc = (self.loc[0]+self.vel[0], self.loc[1]+self.vel[1])
-        self.checky();
-        line=self.text[int(self.loc[1])]
-        self.ww=len(line)-1
-        self.checkx()
-        word=line[int(self.loc[0])]
-        return (word,self.loc) # returns word, POS and location
+        word,pos=self.updatelocation()
+        self.move_worm()
+        return (word,pos,self.loc) # returns word, POS and location
 
     def squiggler(self):
         self.counter = self.counter + 1;
@@ -273,24 +331,18 @@ class worm():
         z = (self.acc[0] * math.cos(rot) - self.acc[1] * math.sin(rot), self.acc[0] * math.sin(rot) + self.acc[1] * math.cos(rot))
         self.acc = (self.dir[0],self.dir[1])
         self.acc = (self.acc[0] + z[0], self.acc[1] + z[1])
-        self.vel = (self.vel[0] + self.acc[0], self.vel[1] + self.acc[1])
-        self.vel=limit(self.vel,self.maxspeed)
-        self.loc = (self.loc[0]+self.vel[0], self.loc[1]+self.vel[1])
-        self.checky();
-        line=self.text[int(self.loc[1])]
-        self.ww=len(line)-1
-        self.checkx()
-        word=line[int(self.loc[0])]
-        return (word,self.loc) # returns word, POS and location
-
+        word,pos=self.updatelocation()
+        self.move_worm()
+        return (word,pos,self.loc) # returns word, POS and location
+    
+    #BUG FIX: not indexing into tuple when comparing with forms of worm
+    #BUG FIX: var names unaligned => not returning correct tuple form within first if statement
     def seek(self):
-        word=()
         if self.target == (0,0):
-            word=self.wander()
-            if word[0][0]=="worm" or word=="Worm" or word=="WORM" or word=="worms" or word=="Worms":
-                self.target=word[1] 
-#                print self.target
-            return (word[0],word[1]) # returns word, POS and location
+            word,pos,loc=self.wander()
+            if word=="worm" or word=="Worm" or word=="WORM" or word=="worms" or word=="Worms":
+                self.target=loc
+            return (word,pos,loc) # returns word, POS and location
         else: # move towards target
             self.acc=(self.target[0]-self.loc[0], self.target[1]-self.loc[1])
             self.acc=normalize(self.acc)
@@ -301,15 +353,9 @@ class worm():
             self.ww=len(line)-1
             self.checkdist() ### ????
             self.acc = (self.acc[0] * self.speed, self.acc[1] * self.speed)
-            self.vel = (self.vel[0] + self.acc[0], self.vel[1] + self.acc[1])
-            self.vel=limit(self.vel,self.maxspeed)
-            self.loc = (self.loc[0]+self.vel[0], self.loc[1]+self.vel[1])
-            self.checky();
-            line=self.text[int(self.loc[1])]
-            self.ww=len(line)-1
-            self.checkx()
-            word=line[int(self.loc[0])]
-            return (word,self.loc) # returns word, POS and location
+            word,pos=self.updatelocation()
+            self.move_worm()
+            return (word,pos,self.loc) # returns word, POS and location
  
 # TODO diff movements -> move randomly then towards targetsDONE, move
 # away from targets, up and then down=reflect, establish wormholes ->
@@ -318,6 +364,7 @@ class worm():
 # below example which rewrites straight read text with wormed POS
 # how to make more generic - worm interaction?
 
+SCREEN_DIM=640
 random.seed()
 loc=(randy(20),randy(20))
 loc2=(randy(20),randy(20))
@@ -342,25 +389,27 @@ maxspeed=2
 # test random worm 
 
 # TESTING: list of texts, list of worms, list of functions
+def test_worms():
+    textlist=["fullblake_pickle","conqueror_pickle","lusus_serius_maier_pickle","beddoesvoll_pickle","prematureburial_pickle","usher_pickle","death_pickle","COMPOST"]
+    wormlist=['basicworm','bookworm','straightworm', 'seeker', 'squiggler']
+    funclist=[matchonlyfirst,matchpos,matchrhyme,matchswop]
 
-textlist=["fullblake_pickle","conqueror_pickle","lusus_serius_maier_pickle","beddoesvoll_pickle","prematureburial_pickle","usher_pickle","death_pickle","COMPOST"]
-wormlist=['basicworm','bookworm','straightworm','seeker','squiggler']
-funclist=[matchonlyfirst,matchpos,matchrhyme,matchswop]
+    wormyy=[]
+    for x in range(5):
+        loc=(randy(20),randy(20))
+#        wormyy.append(worm(loc,speed,maxspeed, random.choice(textlist), random.choice(wormlist),random.choice(funclist),None,loc,speed,random.choice(textlist), random.choice(wormlist)))
+        wormyy.append(worm(loc,speed,maxspeed, "fullblake_pickle", random.choice(wormlist),random.choice(funclist),None,loc,speed,"conqueror_pickle", random.choice(wormlist)))
 
-wormyy=[]
-for x in xrange(40):
-    loc=(randy(20),randy(20))
-    wormyy.append(worm(loc,speed,maxspeed, random.choice(textlist), random.choice(wormlist),random.choice(funclist),None,loc,speed,random.choice(textlist), random.choice(wormlist)))
+    for x in range(100):
+        wormyy[0].doallworms()
 
-wormyy[0].doinit()
+screen = pygame.display.set_mode((SCREEN_DIM,SCREEN_DIM))
+white = (255,255,255)
+black = (0,0,0)
+screen.fill(white)
+pygame.display.update()
+test_worms()
 
-for x in xrange(1000):
-#while(1):
-    wormyy[0].doallworms()
-#for x,y,s in plotter:
-#    print (x,y,s)
-#    plt.text(x,y,s)
-#plt.show()
 
 ####///////////////////////////////////////////////////////////////////
 
@@ -413,3 +462,24 @@ for x in xrange(1000):
 
 # 13/4 - TODO as above // tests as seems all a bit OFF and add tailed functions, also syllabic matching and how to _and_ matches like pos and ryhmes
 
+#CHANGES BY MARIE
+
+#Decompose / style changes
+
+#1. Remove doinit and initialize self.text when creating the new worm
+
+#2. Remove self.wormlist => only need to use self.fullworms
+
+#3. Change (word, loc) in worm type functions to (word, pos, loc) => better readability in matchfunctions
+
+#4. Add Updatelocation as helper function to worm functions
+
+#Bug Fixes (see above functions)
+
+#posmatch: otherpos and pos are not the same type (pos vs location)
+
+#rhymematch: wordone and wordtwo are not the same type
+
+#seek: not indexing into tuple when comparing with forms of worm
+
+#seek: var names unaligned => not returning correct tuple form within first if statement
