@@ -3,7 +3,6 @@
 import random
 import math
 import nltk
-#import matplotlib.pyplot as plt
 import pickle
 import collections
 import functools
@@ -14,7 +13,6 @@ import sys, pygame
 cmudict = nltk.corpus.cmudict.dict()
 pygame.init()
 wormfont = pygame.font.SysFont("monospace", 10)
-#plotter=[]
 
 def rhyme(a, b):
     if a.lower() not in cmudict or b not in cmudict or a == b:
@@ -27,7 +25,6 @@ def recallpickle(where):
     out = open(where, 'rb')
     text=pickle.load(out) 
     out.close()
-#    testtext(text)
     return text
     
 def testtext(text):
@@ -61,7 +58,6 @@ def normalize(tup):
 def limit(tup,limit):
     x=tup[0]
     y=tup[1]
-#   (magSq() > max*max) { normalize(); mult(max); 
     if math.sqrt(x*x + y*y) > limit*limit:
         (x,y)=normalize(tup)
         x=x*limit
@@ -101,8 +97,6 @@ def matchrhyme(matchone,matchtwo): # look for match
     return other
 
 class worm():
-    compost_stack = -1
-    compost = []
     
     #list of full worms (worms that have partners)
     fullworms=[]
@@ -114,8 +108,6 @@ class worm():
         self.acc=(0,0)
         self.vel=(0,0)
         self.text_name=textpickle #for debugging
-        #        self.ww = 2400 # or this is based on text/pickle but per line so...
-        #self.wh = 2400 # or this is based on text/pickle but per line so...
         self.maxspeed = maxspeed
         self.tail = []
         self.equalized_tail = []  #tail normalized for visualization
@@ -135,22 +127,19 @@ class worm():
 
         self.function=self.wormdict[wormtype]
         # also need holes, targets and so on TODO maybe as dictionary or as part of text itself
-#        self.composter=0 #not in use
         self.matchfunc=matchfunc
-#        for w in range(self.trail):
-#            self.tail.append((self.loc[0],self.loc[1]-w))
 
-        worm.compost_stack += 1
-        self.stack=worm.compost_stack
-        worm.compost.append([])
         if textpickle == "COMPOST":
-#            self.composter=randyx(self.stack,worm.compost_stack) # but not itself #not in use
             self.text=worm.simplecompost
             self.loc = (0,0)
+            self.wh=0
+            self.ww=0
         else: 
             self.text = recallpickle(textpickle)
-            self.loc = (randy(20),randy(len(self.text))) 
-        #self.init_tail()   
+            self.loc = (randy(20),randy(len(self.text)))
+            self.wh = len(self.text)-1 
+            self.ww = len(self.text[0])-1
+        #self.init_tail()   #use to initially draw worms
         if partner==None:
             self.partner=worm(partnerloc,partnerspeed,maxspeed,partnerpickle,partnertype,None,"Some",0,0,0,0) 
             worm.fullworms.append(self)    
@@ -176,8 +165,8 @@ class worm():
         return equalized_tail
 
     def equalize_x_and_y(self, loc):
-        equalized_x = loc[0]*640/len(self.text[int(self.loc[1])])
-        equalized_y = loc[1]*640/len(self.text)
+        equalized_x = loc[0]*SCREEN_DIM/len(self.text[int(self.loc[1])])
+        equalized_y = loc[1]*SCREEN_DIM/len(self.text)
         return (equalized_x, equalized_y)
 
     def checkdist(self):
@@ -187,15 +176,9 @@ class worm():
         if dis[0]>self.wh/2:
             self.acc=(self.acc[0], self.acc[1]* -1)
 
-    def do_tail(self):
-        self.tail[self.trail-1]=(self.loc[0],self.loc[1])
-        for w in range(self.trail-1):
-            self.tail[w]=self.tail[w+1]
-
     #Move each worm on display according to current location => shift entire tail
     def move_worm(self):
         pygame.time.delay(100)
-#        equalized_tail = self.equalize_tail()
         pygame.draw.lines(screen, white, False, self.equalized_tail, 1)
         for w in range(self.trail-1):
             self.tail[w+1]=self.tail[w]
@@ -214,41 +197,14 @@ class worm():
     #Write word on screen at equalized location of worm (in red if match)
     def write_word(self, word, match):
         pygame.time.delay(100)
-        if match:
-            label = wormfont.render(word, 1, red)
-        else:
-            label = wormfont.render(word, 1, black)
-        loc = self.equalize_x_and_y(self.loc)
-        screen.blit(label, loc)
-        pygame.display.update()
-            
-    def word_at(self,loc):
-        # check x and y for self.text
-        wh = len(self.text)-1 # number of lines 
-        if int(loc[1])>wh:
-            loc=(loc[0],0)
-        if loc[1]<0:
-            loc=(loc[0],wh)
-        line=self.text[int(loc[1])]
-        ww=len(line)-1
-        if ww>0:
-            if int(loc[0])>ww:
-                loc=(0,loc[1])
-            if loc[0]<0:
-                loc=(ww-1,loc[1])
-        else:
-            loc=(0,loc[1])
-        word=line[int(loc[0])]
-        return word
-
-    def tailword(self):
-        # runfunc/do_tail/cycle through word at tail
-        self.tailcount+=1
-        if self.tailcount>=self.trail-1:
-            self.tailcount=0
-        self.wander() # or another function - how to specify tail as on/off?
-        self.do_tail()
-        return self.word_at(self.tail[self.tailcount])
+        if not word.isspace():
+            if match:
+                label = wormfont.render(word, 1, red)
+            else:
+                label = wormfont.render(word, 1, black)
+            loc = self.equalize_x_and_y(self.loc)
+            screen.blit(label, loc)
+            pygame.display.update()
 
     def checky(self):
         self.wh = len(self.text)-1 # number of lines 
@@ -270,12 +226,10 @@ class worm():
     def checkx(self):
         if self.ww>0:
             if int(self.loc[0])>self.ww:
- #               self.loc=(0,self.loc[1])  #reach right and appear in left
                 self.acc=(-self.acc[0],self.acc[1])
                 self.vel=(0,0)
                 self.loc=(self.ww,self.loc[1])
             if self.loc[0]<0:
- #              self.loc=(self.ww-1,self.loc[1])  #reach left and appear in right
                 self.acc=(-self.acc[0],self.acc[1])
                 self.vel=(0,0)
                 self.loc=(0,self.loc[1])
@@ -312,13 +266,7 @@ class worm():
                         worms.partner.write_word(word, True)
                     print (word, (int(loc[0]),int(loc[1])))#, worms.matchfunc, worms.function, worms.partner.function, worms.text_name, worms.partner.text_name)
                     otherlist.append((word,pos))
-                    #                worm.compost[self.stack].append(otherlist)
                 worm.simplecompost.append(otherlist)
-#                print worm.simplecompost
-                #                print worms.function,
-                # if worms.textpickle=="COMPOST":
-                #     print " ".join([x[0] for x in otherlist]),
-#                print " ".join([x[0] for x in list]),
 
     def wander(self):
         self.acc = (self.acc[0] + random.uniform(-2,2), self.acc[1] + random.uniform(-2,2))
@@ -401,36 +349,16 @@ loc2=(randy(20),randy(20))
 speed=1
 maxspeed=2
 
-# 'basicworm': self.wander,
-# 'bookworm':self.reader,
-# 'straightworm':self.straight,
-# 'seeker':self.seek,
-# 'squiggler':self.squiggler
-
-# firstworm=worm(loc,speed,maxspeed, "conqueror_pickle", 'bookworm',matchonlyfirst, None, loc,speed,"lusus_serius_maier_pickle","bookworm")
-# firstworm.doinit()
-
-# for x in xrange(10):
-#     firstworm.doallworms()
-
-# for x in xrange(400):
-#     print firstworm.tailword()[0],
-
-# test random worm 
-
 # TESTING: list of texts, list of worms, list of functions
 def test_worms():
     textlist=["fullblake_pickle","conqueror_pickle","lusus_serius_maier_pickle","beddoesvoll_pickle","prematureburial_pickle","usher_pickle","death_pickle","COMPOST"]
     wormlist=['basicworm','bookworm','straightworm', 'seeker', 'squiggler']
     funclist=[matchonlyfirst,matchpos,matchrhyme,matchswop]
 
-    #matchonlyfirst
-
     wormyy=[]
     for x in range(5):
         loc=(randy(20),randy(20))
         wormyy.append(worm(loc,speed,maxspeed, random.choice(textlist), random.choice(wormlist),random.choice(funclist),None,loc,speed,random.choice(textlist), random.choice(wormlist)))
-#        wormyy.append(worm(loc,speed,maxspeed, 'conqueror_pickle', 'squiggler',matchonlyfirst,None,loc,speed,'conqueror_pickle', 'squiggler'))
 
     for x in range(100):
         wormyy[0].doallworms()
